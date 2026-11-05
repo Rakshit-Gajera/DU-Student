@@ -1,0 +1,14 @@
+<!-- Two themeable colors (replace tokens at runtime):
+     TITLE_COLOR -> "Parul University" text (default #111111)
+     THEME_COLOR -> "Possible Hai!" badge       (default #EC008C)
+     Fixed: white "Yahan" tab, its dark text, and white "Possible Hai!" text. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="430" height="118" viewBox="-50 0 430 118">
+  <text x="6" y="46" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="46" letter-spacing="-1.5" fill="#TITLE_COLOR">Parul</text>
+  <text x="125" y="25" font-family="Arial, Helvetica, sans-serif" font-weight="400" font-size="18" fill="#TITLE_COLOR">®</text>
+  <text x="140" y="46" font-family="Arial, Helvetica, sans-serif" font-weight="400" font-size="46" letter-spacing="-1" fill="#TITLE_COLOR">University</text>
+
+  <rect x="6" y="64" width="290" height="42" rx="10" fill="#THEME_COLOR"></rect>
+  <path d="M16 64 H104 V106 H16 A10 10 0 0 1 6 96 V74 A10 10 0 0 1 16 64 Z" fill="#FFFFFF" stroke="#D9DEE3" stroke-width="1.5"></path>
+  <text x="20" y="93" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="25" fill="#1C252E">Yahan</text>
+  <text x="116" y="93" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="25" fill="#FFFFFF">Possible Hai!</text>
+</svg>

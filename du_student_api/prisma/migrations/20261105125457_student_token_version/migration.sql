@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "students" ADD COLUMN     "token_version" INTEGER NOT NULL DEFAULT 0;

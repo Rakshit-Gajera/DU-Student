@@ -1,0 +1,468 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- Enums
+
+enum AdminRole {
+  ADMIN
+  SUPERADMIN
+}
+
+/// AE is the app's "A (e)" (absent, excused). A slot with no lecture ("-" in the
+/// app) has no row at all.
+enum AttendanceStatus {
+  P
+  A
+  AE
+  NA
+}
+
+enum LmsContentType {
+  PRESENTATION
+  LAB_MANUAL
+}
+
+enum GrievanceStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum CertificateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ExamType {
+  EXAM
+  IA
+  LMS_TEST
+}
+
+// ---------------------------------------------------------------- People
+
+model Admin {
+  id           String    @id @default(uuid()) @db.Uuid
+  username     String    @unique
+  email        String    @unique
+  name         String
+  passwordHash String    @map("password_hash")
+  role         AdminRole @default(ADMIN)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("admins")
+}
+
+model Mentor {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  designation String?
+  mobile      String?
+  officeNo    String?  @map("office_no")
+  email       String?
+  department  String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  students Student[]
+
+  @@map("mentors")
+}
+
+model Student {
+  id           String   @id @default(uuid()) @db.Uuid
+  enrollmentNo String   @unique @map("enrollment_no")
+  name         String
+  photoUrl     String?  @map("photo_url")
+  classLabel   String   @map("class_label")
+  batch        String
+  rollNo       String   @map("roll_no")
+  currentSem   Int      @default(1) @map("current_sem")
+  email        String?
+  mobile       String?
+  department   String?
+  passwordHash String   @map("password_hash")
+  /// Raised when the password changes, which ends every session of this student.
+  tokenVersion Int      @default(0) @map("token_version")
+  mentorId     String?  @map("mentor_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  mentor            Mentor?                  @relation(fields: [mentorId], references: [id], onDelete: SetNull)
+  attendance        AttendanceRecord[]
+  pastAttendance    PastSemesterAttendance[]
+  courseAttendance  CourseAttendance[]
+  semesterResults   SemesterResult[]
+  mentoringSessions MentoringSession[]
+  transport         Transport[]
+  grievances        Grievance[]
+  certificates      CertificateRequest[]
+  lmsViews          LmsContentView[]
+  attendanceSummary AttendanceSummary?
+  mentorHistory     MentorHistory[]
+  circulars         Circular[]
+  lmsContent        LmsContent[]
+  examSchedules     ExamSchedule[]
+  lmsTestResults    LmsTestResult[]
+  busReceipts       BusReceipt[]
+
+  @@index([batch])
+  @@index([classLabel])
+  @@map("students")
+}
+
+// ---------------------------------------------------------------- Academics
+
+model Subject {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  type      String   @default("Theory")
+  /// Semester the subject is taught in. Decides what /api/student/subjects returns.
+  semester  Int?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  attendance    AttendanceRecord[]
+  courseResults CourseResult[]
+  lmsContent    LmsContent[]
+  examSchedules ExamSchedule[]
+
+  @@index([semester])
+  @@map("subjects")
+}
+
+model AttendanceRecord {
+  id        String           @id @default(uuid()) @db.Uuid
+  studentId String           @map("student_id") @db.Uuid
+  /// Optional: the daily grid is keyed by date and slot, and the demo data does
+  /// not say which subject each slot belonged to.
+  subjectId String?          @map("subject_id") @db.Uuid
+  date      DateTime         @db.Date
+  slot      Int
+  status    AttendanceStatus
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, date, slot])
+  @@index([studentId, date])
+  @@map("attendance_records")
+}
+
+model PastSemesterAttendance {
+  id        String   @id @default(uuid()) @db.Uuid
+  studentId String   @map("student_id") @db.Uuid
+  semNo     Int      @map("sem_no")
+  yearLabel String   @map("year_label")
+  percent   Float
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, semNo])
+  @@map("past_semester_attendance")
+}
+
+/// The current semester's totals, entered by an admin. The daily grid only holds recent dates.
+model AttendanceSummary {
+  studentId    String   @id @map("student_id") @db.Uuid
+  yearLabel    String   @map("year_label")
+  percent      Float
+  present      Int
+  absent       Int
+  pending      Int      @default(0)
+  noAttendance Int      @default(0) @map("no_attendance")
+  total        Int
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("attendance_summaries")
+}
+
+model CourseAttendance {
+  id        String   @id @default(uuid()) @db.Uuid
+  studentId String   @map("student_id") @db.Uuid
+  /// Display label, e.g. "2301CS401 - Database Management System - II - Theory".
+  course    String
+  total     Int
+  present   Int
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, course])
+  @@map("course_attendance")
+}
+
+model SemesterResult {
+  id        String   @id @default(uuid()) @db.Uuid
+  studentId String   @map("student_id") @db.Uuid
+  semNo     Int      @map("sem_no")
+  yearLabel String   @map("year_label")
+  /// Shown in the app's exam picker. Falls back to "Semester - N Regular <yearLabel>".
+  examName  String?  @map("exam_name")
+  /// spi, cpi and backlogs are derived from the course rows by results.service.ts.
+  spi       Float    @default(0)
+  cpi       Float    @default(0)
+  backlogs  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courses CourseResult[]
+
+  @@unique([studentId, semNo])
+  @@map("semester_results")
+}
+
+model CourseResult {
+  id          String  @id @default(uuid()) @db.Uuid
+  semResultId String  @map("sem_result_id") @db.Uuid
+  subjectId   String  @map("subject_id") @db.Uuid
+  grade       String
+  credits     Int
+  examSeason  String? @map("exam_season")
+  attemptNo   Int     @default(1) @map("attempt_no")
+
+  semResult SemesterResult @relation(fields: [semResultId], references: [id], onDelete: Cascade)
+  subject   Subject        @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  @@unique([semResultId, subjectId])
+  @@map("course_results")
+}
+
+/// Each student has their own schedule.
+model ExamSchedule {
+  id        String    @id @default(uuid()) @db.Uuid
+  studentId String    @map("student_id") @db.Uuid
+  subjectId String?   @map("subject_id") @db.Uuid
+  type      ExamType  @default(EXAM)
+  title     String
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+  semester  Int?
+  venue     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  student Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([startDate])
+  @@map("exam_schedules")
+}
+
+// ---------------------------------------------------------------- LMS
+
+/// Each student has their own content.
+model LmsContent {
+  id         String         @id @default(uuid()) @db.Uuid
+  studentId  String         @map("student_id") @db.Uuid
+  subjectId  String         @map("subject_id") @db.Uuid
+  type       LmsContentType
+  title      String
+  subtitle   String?
+  /// Uploaded file ("/uploads/...") or an external http(s) link.
+  fileUrl    String?        @map("file_url")
+  uploadedAt DateTime       @default(now()) @map("uploaded_at") @db.Date
+  visible    Boolean        @default(true)
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+
+  subject Subject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  student Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  views   LmsContentView[]
+
+  @@index([studentId, subjectId, type])
+  @@index([subjectId, type])
+  @@map("lms_content")
+}
+
+/// One attempt at one unit's LMS test.
+model LmsTestResult {
+  id        String   @id @default(uuid()) @db.Uuid
+  studentId String   @map("student_id") @db.Uuid
+  semNo     Int      @map("sem_no")
+  course    String
+  /// Display order of courses within a semester.
+  position  Int      @default(0)
+  unit      Int
+  testDate  DateTime @map("test_date") @db.Date
+  attemptNo Int      @default(1) @map("attempt_no")
+  marks     Int
+  maxMarks  Int      @default(30) @map("max_marks")
+  passed    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, semNo])
+  @@map("lms_test_results")
+}
+
+/// Backs the "seen" flag the app shows on each LMS item.
+model LmsContentView {
+  studentId String   @map("student_id") @db.Uuid
+  contentId String   @map("content_id") @db.Uuid
+  seenAt    DateTime @default(now()) @map("seen_at")
+
+  student Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  content LmsContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, contentId])
+  @@map("lms_content_views")
+}
+
+// ---------------------------------------------------------------- Student services
+
+model MentoringSession {
+  id                 String    @id @default(uuid()) @db.Uuid
+  studentId          String    @map("student_id") @db.Uuid
+  mentorName         String    @map("mentor_name")
+  issue              String
+  parentsDescription String?   @map("parents_description")
+  nextMeeting        DateTime? @map("next_meeting")
+  when               DateTime
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, when])
+  @@map("mentoring_sessions")
+}
+
+/// Who mentored a student and when. Meetings is entered by an admin.
+model MentorHistory {
+  id         String    @id @default(uuid()) @db.Uuid
+  studentId  String    @map("student_id") @db.Uuid
+  mentorName String    @map("mentor_name")
+  fromDate   DateTime  @map("from_date") @db.Date
+  /// null means this is the current mentor.
+  toDate     DateTime? @map("to_date") @db.Date
+  meetings   Int       @default(0)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("mentor_history")
+}
+
+model Transport {
+  id          String    @id @default(uuid()) @db.Uuid
+  studentId   String    @map("student_id") @db.Uuid
+  busRoute    String    @map("bus_route")
+  passNo      String    @unique @map("pass_no")
+  /// Printed on the pass after the mobile number.
+  batchCode   String?   @map("batch_code")
+  busCode     String?   @map("bus_code")
+  pickupPoint String?   @map("pickup_point")
+  pickupAddress String? @map("pickup_address")
+  shift       String?
+  validFrom   DateTime  @map("valid_from") @db.Date
+  validTo     DateTime  @map("valid_to") @db.Date
+  active      Boolean   @default(true)
+  feesAmount  Int       @default(0) @map("fees_amount")
+  feesPaid    Int       @default(0) @map("fees_paid")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("transport")
+}
+
+model BusReceipt {
+  id          String   @id @default(uuid()) @db.Uuid
+  studentId   String   @map("student_id") @db.Uuid
+  receiptNo   String   @map("receipt_no")
+  paidOn      DateTime @map("paid_on") @db.Date
+  amount      Int
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("bus_receipts")
+}
+
+/// Each student has their own circulars.
+model Circular {
+  id          String   @id @default(uuid()) @db.Uuid
+  studentId   String   @map("student_id") @db.Uuid
+  title       String
+  /// Markdown source.
+  content     String
+  publishedAt DateTime @map("published_at")
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([publishedAt])
+  @@map("circulars")
+}
+
+model Grievance {
+  id          String          @id @default(uuid()) @db.Uuid
+  studentId   String          @map("student_id") @db.Uuid
+  grievanceNo String          @unique @map("grievance_no")
+  category    String
+  title       String
+  description String
+  status      GrievanceStatus @default(PENDING)
+  filedAt     DateTime        @default(now()) @map("filed_at")
+  resolvedAt  DateTime?       @map("resolved_at")
+  resolvedBy  String?         @map("resolved_by")
+  resolution  String?
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([studentId])
+  @@map("grievances")
+}
+
+model CertificateRequest {
+  id           String            @id @default(uuid()) @db.Uuid
+  studentId    String            @map("student_id") @db.Uuid
+  type         String
+  purpose      String?
+  copies       Int               @default(1)
+  deliveryMode String?           @map("delivery_mode")
+  details      String?
+  status       CertificateStatus @default(PENDING)
+  remarks      String?
+  requestedAt  DateTime          @default(now()) @map("requested_at")
+  decidedAt    DateTime?         @map("decided_at")
+  decidedBy    String?           @map("decided_by")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([studentId])
+  @@map("certificate_requests")
+}

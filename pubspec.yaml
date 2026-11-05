@@ -1,0 +1,45 @@
+name: du_student_app
+description: DU student app. Shows live data from du_student_api.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  dio: ^5.11.1
+  flutter:
+    sdk: flutter
+  flutter_markdown_plus: ^1.0.12
+  flutter_riverpod: ^3.4.3
+  flutter_secure_storage: ^11.2.0
+  url_launcher: ^6.3.3
+
+dev_dependencies:
+  integration_test:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/demo/
+  fonts:
+    - family: QuicksandLight
+      fonts:
+        - asset: assets/fonts/Quicksand-Light.ttf
+    - family: QuicksandRegular
+      fonts:
+        - asset: assets/fonts/Quicksand-Regular.ttf
+    - family: QuicksandMedium
+      fonts:
+        - asset: assets/fonts/Quicksand-Medium.ttf
+    - family: QuicksandSemiBold
+      fonts:
+        - asset: assets/fonts/Quicksand-SemiBold.ttf
+    - family: QuicksandBold
+      fonts:
+        - asset: assets/fonts/Quicksand-Bold.ttf
